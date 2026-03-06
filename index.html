@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScriptForge — YouTube Outline Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a08;
+    --surface: #121210;
+    --surface2: #1c1c18;
+    --border: #2a2a24;
+    --accent: #e8d44d;
+    --accent2: #ff6b35;
+    --text: #f0ede4;
+    --muted: #7a7a6e;
+    --step-active: #e8d44d;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  header {
+    padding: 2.5rem 3rem 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.2rem;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .app-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 80px);
+  }
+
+  /* Sidebar */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 2.5rem 2rem;
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+
+  .sidebar-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .step-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid transparent;
+  }
+
+  .step-item:hover { background: var(--surface2); }
+  .step-item.active { background: var(--surface2); border-color: var(--border); }
+  .step-item.completed .step-num { background: var(--accent); color: var(--bg); }
+
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+    transition: all 0.3s;
+    margin-top: 1px;
+  }
+
+  .step-item.active .step-num {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+
+  .step-info {}
+  .step-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .step-item.active .step-title { color: var(--accent); }
+  .step-desc {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+    line-height: 1.4;
+  }
+
+  /* Progress bar */
+  .progress-wrap {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+  }
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* Main content */
+  .main-content {
+    padding: 3rem 4rem;
+    max-width: 780px;
+  }
+
+  .step-panel { display: none; animation: fadeUp 0.4s ease; }
+  .step-panel.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-header {
+    margin-bottom: 2.5rem;
+  }
+
+  .step-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .step-heading {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.4rem;
+    line-height: 1.15;
+    color: var(--text);
+  }
+
+  .step-heading em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .step-explainer {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 560px;
+  }
+
+  /* Form fields */
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .field-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: -0.2rem;
+  }
+
+  .field-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  input[type="text"], textarea, select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.92rem;
+    padding: 0.85rem 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+    appearance: none;
+    resize: vertical;
+  }
+
+  input[type="text"]:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(232, 212, 77, 0.1);
+  }
+
+  input[type="text"]::placeholder, textarea::placeholder {
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  textarea { min-height: 90px; line-height: 1.6; }
+  textarea.tall { min-height: 130px; }
+
+  select option { background: var(--surface); }
+
+  /* Avatar rows */
+  .avatar-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+
+  .avatar-header {
+    background: var(--surface2);
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .avatar-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+  .avatar-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.75rem;
+    border-radius: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    letter-spacing: 0.02em;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn-primary:hover { background: #f0e060; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid transparent;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+  .btn-danger:hover { border-color: var(--accent2); }
+
+  /* Journey sections */
+  .journey-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .journey-header {
+    background: var(--surface2);
+    padding: 0.75rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .journey-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  .journey-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .journey-sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .journey-body { padding: 1rem 1.2rem; }
+
+  /* Outline preview / export */
+  #outline-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.8;
+    color: var(--text);
+    white-space: pre-wrap;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .export-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-export {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+  }
+
+  .btn-export:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-export.primary-export { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 700; }
+  .btn-export.primary-export:hover { background: #f0e060; }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 2rem 0;
+  }
+
+  /* Tooltip-like callout */
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1rem;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+  }
+
+  .callout strong { color: var(--accent); font-weight: 600; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  @media (max-width: 900px) {
+    .app-layout { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .main-content { padding: 2rem 1.5rem; }
+    header { padding: 1.5rem; }
+    .step-nav { flex-direction: row; flex-wrap: wrap; gap: 0.5rem; }
+    .step-desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">ScriptForge</span>
+  <span class="logo-sub">YouTube Outline Builder · by Isaac's Framework</span>
+</header>
+
+<div class="app-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <p class="sidebar-label">Framework Steps</p>
+    <nav class="step-nav" id="stepNav">
+      <div class="step-item active" data-step="0">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <div class="step-title">Foundation</div>
+          <div class="step-desc">Common goal & viewer relationship</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="1">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <div class="step-title">The Problem</div>
+          <div class="step-desc">Surface vs. deeper emotional problem</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="2">
+        <div class="step-num">3</div>
+        <div class="step-info">
+          <div class="step-title">Packaging</div>
+          <div class="step-desc">Title, thumbnail & promise</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="3">
+        <div class="step-num">4</div>
+        <div class="step-info">
+          <div class="step-title">Audience Avatars</div>
+          <div class="step-desc">Specific viewer personas</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="4">
+        <div class="step-num">5</div>
+        <div class="step-info">
+          <div class="step-title">Research Gaps</div>
+          <div class="step-desc">What others missed</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="5">
+        <div class="step-num">6</div>
+        <div class="step-info">
+          <div class="step-title">Structure & Arc</div>
+          <div class="step-desc">Transformation + Hero's Journey</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="6">
+        <div class="step-num">7</div>
+        <div class="step-info">
+          <div class="step-title">Universe</div>
+          <div class="step-desc">Larger narrative arc</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="7">
+        <div class="step-num">8</div>
+        <div class="step-info">
+          <div class="step-title">Draft Notes</div>
+          <div class="step-desc">Show don't tell & rhythm</div>
+        </div>
+      </div>
+      <div class="step-item" data-step="8">
+        <div class="step-num">✦</div>
+        <div class="step-info">
+          <div class="step-title">Export Outline</div>
+          <div class="step-desc">Your complete script foundation</div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Progress</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+
+    <!-- STEP 0: Foundation -->
+    <div class="step-panel active" id="panel-0">
+      <div class="step-header">
+        <span class="step-tag">Step 01 — Foundation</span>
+        <h2 class="step-heading">What's your <em>common goal</em><br>with the viewer?</h2>
+        <p class="step-explainer">Before a single word is written, you need a shared destination. This isn't about your video topic — it's about what you and your viewer are both striving toward together.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">Video working title</label>
+          <p class="field-hint">A rough title — just to ground us. You'll refine it in Packaging.</p>
+          <input type="text" id="f0_title" placeholder="e.g. How I Built a $10k/mo Notion Dashboard">
+        </div>
+        <div class="field">
+          <label class="field-label">What does the viewer want to achieve after watching?</label>
+          <p class="field-hint">Not what you want to teach — what they're walking away with. Be specific.</p>
+          <textarea id="f0_viewer_goal" placeholder="e.g. They want to finally stop procrastinating by having a system that actually works for their ADHD brain."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">What do YOU want to achieve with this video?</label>
+          <p class="field-hint">Channel growth, trust, sales, authority? Be honest.</p>
+          <textarea id="f0_creator_goal" placeholder="e.g. Position myself as the go-to Notion creator for neurodivergent productivity. Build trust so they click through to my course."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Where do these two goals overlap?</label>
+          <p class="field-hint">This overlap IS the common goal. The foundation of your entire video.</p>
+          <textarea id="f0_common_goal" placeholder="e.g. Both of us want them to build a system that sticks — because their success = my credibility."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="goTo(1)">Next: The Problem →</button>
+      </div>
+    </div>
+
+    <!-- STEP 1: Surface vs Deeper Problem -->
+    <div class="step-panel" id="panel-1">
+      <div class="step-header">
+        <span class="step-tag">Step 02 — The Problem</span>
+        <h2 class="step-heading">Surface issue.<br><em>Deeper wound.</em></h2>
+        <p class="step-explainer">Great scripts address two problems simultaneously. The surface problem is what they Googled. The deeper problem is the emotional struggle underneath — the one they'd never admit out loud.</p>
+      </div>
+      <div class="callout">
+        <strong>Example:</strong> Surface = "My Notion setup keeps breaking." Deeper = "I'm terrified I'm just lazy and no system will ever work for me."
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">Surface problem <span class="field-tag">technical</span></label>
+          <p class="field-hint">The concrete, Googleable thing they're struggling with.</p>
+          <textarea id="f1_surface" placeholder="e.g. Their Notion databases are too complex, they abandon them after a week."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Deeper problem <span class="field-tag">emotional</span></label>
+          <p class="field-hint">The identity-level fear or frustration underneath. What does failing at this make them feel about themselves?</p>
+          <textarea id="f1_deeper" placeholder="e.g. They believe they're fundamentally incapable of being organized. Everyone else seems to have it figured out."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">How will you hint at the deeper problem without stating it? <span class="field-tag">show don't tell</span></label>
+          <p class="field-hint">A scene, scenario, or moment that makes them feel seen — without spelling it out.</p>
+          <textarea id="f1_hint" placeholder="e.g. Open with: 'You've probably built your third 'perfect' Notion setup this year. And you're already wondering how long this one will last.'"></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goTo(0)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(2)">Next: Packaging →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Packaging -->
+    <div class="step-panel" id="panel-2">
+      <div class="step-header">
+        <span class="step-tag">Step 03 — Packaging</span>
+        <h2 class="step-heading">What <em>promise</em><br>are you making?</h2>
+        <p class="step-explainer">Your thumbnail and title make a promise. Your script must deliver exactly that promise — nothing more, nothing less. Mismatches destroy trust and tank retention.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">Refined title (the promise)</label>
+          <input type="text" id="f2_title" placeholder="e.g. The Notion System That Actually Sticks (for ADHD Brains)">
+        </div>
+        <div class="field">
+          <label class="field-label">Thumbnail concept</label>
+          <p class="field-hint">What visual image makes the same promise? Describe it.</p>
+          <textarea id="f2_thumbnail" placeholder="e.g. Before/after split: chaotic sticky note wall vs clean calm dashboard. My face on the 'after' side looking relieved."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Exact promise your video must fulfill</label>
+          <p class="field-hint">Finish this: "By the end, the viewer will have..." — be precise, not vague.</p>
+          <textarea id="f2_promise" placeholder="e.g. A 3-block Notion template they built themselves, and a clear reason WHY previous systems failed them (not a character flaw)."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">What would make someone feel the video didn't deliver?</label>
+          <p class="field-hint">Anti-promise check. Knowing what breaks trust helps you avoid it.</p>
+          <textarea id="f2_breach" placeholder="e.g. If I spend 10 min talking theory and only 2 min showing the actual template setup."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goTo(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(3)">Next: Avatars →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Audience Avatars -->
+    <div class="step-panel" id="panel-3">
+      <div class="step-header">
+        <span class="step-tag">Step 04 — Audience Avatars</span>
+        <h2 class="step-heading">Who <em>specifically</em><br>is watching?</h2>
+        <p class="step-explainer">Define 2–3 specific personas. Real people, not demographics. These avatars decide: how complex your explanations are, what examples land, and what tone feels natural.</p>
+      </div>
+      <div id="avatars-container">
+        <div class="avatar-section">
+          <div class="avatar-header">Avatar 1 — Primary Viewer</div>
+          <div class="avatar-body">
+            <div class="avatar-row">
+              <div class="field">
+                <label class="field-label" style="font-size:0.78rem">Name / Archetype</label>
+                <input type="text" id="av1_name" placeholder="e.g. 'Overwhelmed Emma'">
+              </div>
+              <div class="field">
+                <label class="field-label" style="font-size:0.78rem">Background</label>
+                <input type="text" id="av1_bg" placeholder="e.g. College senior, ADHD diagnosis last year">
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" style="font-size:0.78rem">What they already know</label>
+              <input type="text" id="av1_knows" placeholder="e.g. Basic Notion, has tried GTD, watched Ali Abdaal">
+            </div>
+            <div class="field">
+              <label class="field-label" style="font-size:0.78rem">Their frustration in their own words</label>
+              <textarea id="av1_frustration" style="min-height:60px" placeholder="e.g. 'I keep building these elaborate systems and then abandoning them two weeks later. I don't know what's wrong with me.'"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="avatar-section">
+          <div class="avatar-header">Avatar 2 — Secondary Viewer</div>
+          <div class="avatar-body">
+            <div class="avatar-row">
+              <div class="field">
+                <label class="field-label" style="font-size:0.78rem">Name / Archetype</label>
+                <input type="text" id="av2_name" placeholder="e.g. 'Skeptical Sam'">
+              </div>
+              <div class="field">
+                <label class="field-label" style="font-size:0.78rem">Background</label>
+                <input type="text" id="av2_bg" placeholder="e.g. Software dev, tried 5 productivity apps">
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" style="font-size:0.78rem">What they already know</label>
+              <input type="text" id="av2_knows" placeholder="e.g. Very familiar with productivity systems, highly skeptical of 'gurus'">
+            </div>
+            <div class="field">
+              <label class="field-label" style="font-size:0.78rem">Their frustration in their own words</label>
+              <textarea id="av2_frustration" style="min-height:60px" placeholder="e.g. 'I've tried everything. I need something that actually fits how MY brain works, not a cookie-cutter template.'"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:1rem">
+        <label class="field-label">Content complexity decision</label>
+        <p class="field-hint">Given your avatars, how much do you explain vs. assume they know?</p>
+        <textarea id="f3_complexity" placeholder="e.g. Skip explaining what Notion is. Assume they know databases. Do explain WHY this system is different — they've been burned before."></textarea>
+      </div>
+      <div class="btn-row" style="margin-top:1.5rem">
+        <button class="btn btn-ghost" onclick="goTo(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(4)">Next: Research →</button>
+      </div>
+    </div>
+
+    <!-- STEP 4: Research Gaps -->
+    <div class="step-panel" id="panel-4">
+      <div class="step-header">
+        <span class="step-tag">Step 05 — Research</span>
+        <h2 class="step-heading">What gaps did<br><em>others leave?</em></h2>
+        <p class="step-explainer">Study the top videos on your topic. What did they miss? What questions did commenters ask that weren't answered? Your unique insight fills those gaps.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">Top competing videos on this topic</label>
+          <p class="field-hint">List the 3–5 videos that already cover this. What do they do well?</p>
+          <textarea id="f4_competitors" class="tall" placeholder="1. [Creator] — does well: __, misses: __&#10;2. [Creator] — does well: __, misses: __&#10;3. [Creator] — does well: __, misses: __"></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Most common unanswered comments/questions</label>
+          <p class="field-hint">These are your gold. Real questions = real gaps.</p>
+          <textarea id="f4_gaps" class="tall" placeholder="e.g. 'But how do I maintain this when life gets chaotic?' / 'Does this work if you have multiple projects?' / 'What about on mobile?'"></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Your unique angle / unfair advantage</label>
+          <p class="field-hint">What do YOU know that others don't — from personal experience, credentials, or perspective?</p>
+          <textarea id="f4_angle" placeholder="e.g. I have ADHD myself and built this after 20 failed systems. I can speak to the emotional failure pattern, not just show templates."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goTo(3)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(5)">Next: Structure →</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: Structure & Hero's Journey -->
+    <div class="step-panel" id="panel-5">
+      <div class="step-header">
+        <span class="step-tag">Step 06 — Structure & Arc</span>
+        <h2 class="step-heading">Map the<br><em>transformation.</em></h2>
+        <p class="step-explainer">Every great video has a clear before and after. Then layer the Hero's Journey: conflict, stakes, trials, and transformation. This isn't just for storytelling — it's what keeps viewers watching.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">Viewer's state at the START of the video</label>
+          <p class="field-hint">Emotionally and practically — where are they when they press play?</p>
+          <textarea id="f5_start" placeholder="e.g. Frustrated, has abandoned another system, feels like they're broken. Looking for one more try."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Viewer's state at the END of the video</label>
+          <p class="field-hint">What has shifted — emotionally and practically?</p>
+          <textarea id="f5_end" placeholder="e.g. Has a working system. More importantly, understands WHY previous ones failed (external causes, not them). Feels hopeful."></textarea>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <p style="font-size:0.82rem; font-weight:600; margin-bottom:1rem; color:var(--muted); font-family:'DM Mono',monospace; letter-spacing:0.1em; text-transform:uppercase;">Hero's Journey Map</p>
+
+      <div class="journey-section">
+        <div class="journey-header">
+          <div class="journey-icon">⚡</div>
+          <div class="journey-label">The Ordinary World / Hook</div>
+          <span class="journey-sub">0:00–0:30</span>
+        </div>
+        <div class="journey-body">
+          <textarea id="f5_hook" placeholder="How do you open? Drop into the conflict immediately. Show them their world before the solution."></textarea>
+        </div>
+      </div>
+
+      <div class="journey-section">
+        <div class="journey-header">
+          <div class="journey-icon">🔥</div>
+          <div class="journey-label">The Call / Stakes</div>
+          <span class="journey-sub">conflict</span>
+        </div>
+        <div class="journey-body">
+          <textarea id="f5_call" placeholder="What's at stake if they don't solve this? Make it real. What does failure actually cost them?"></textarea>
+        </div>
+      </div>
+
+      <div class="journey-section">
+        <div class="journey-header">
+          <div class="journey-icon">🗺️</div>
+          <div class="journey-label">The Trials / Main Content</div>
+          <span class="journey-sub">body</span>
+        </div>
+        <div class="journey-body">
+          <textarea id="f5_trials" class="tall" placeholder="List the key sections/steps. Each one should feel like a mini-challenge overcome. What are the 3-5 main moves in your video?"></textarea>
+        </div>
+      </div>
+
+      <div class="journey-section">
+        <div class="journey-header">
+          <div class="journey-icon">✨</div>
+          <div class="journey-label">The Transformation / Payoff</div>
+          <span class="journey-sub">resolution</span>
+        </div>
+        <div class="journey-body">
+          <textarea id="f5_transform" placeholder="How do you close the loop? What's the moment of realization or victory — for them, not just the tutorial completion?"></textarea>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:1.5rem">
+        <button class="btn btn-ghost" onclick="goTo(4)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(6)">Next: Universe →</button>
+      </div>
+    </div>
+
+    <!-- STEP 6: Universe Building -->
+    <div class="step-panel" id="panel-6">
+      <div class="step-header">
+        <span class="step-tag">Step 07 — Universe Building</span>
+        <h2 class="step-heading">Where does this fit<br>in your <em>larger story?</em></h2>
+        <p class="step-explainer">The best channels aren't collections of videos — they're serialized universes. How does this video connect to your past and future content? Like the MCU, each video should feel like an episode in something larger.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">What's the overarching theme/mission of your channel?</label>
+          <textarea id="f6_mission" placeholder="e.g. Helping neurodivergent people build systems that work WITH their brains, not against them."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">What past video does this reference or build on?</label>
+          <input type="text" id="f6_past" placeholder="e.g. 'Why Your Notion Setup Keeps Failing' (my most viral video)">
+        </div>
+        <div class="field">
+          <label class="field-label">What future video does this set up?</label>
+          <input type="text" id="f6_future" placeholder="e.g. The advanced version: 'Notion + Calendar System for ADHD Entrepreneurs'">
+        </div>
+        <div class="field">
+          <label class="field-label">How do you connect the videos? (tease, callback, CTA)</label>
+          <p class="field-hint">A line in the script that plants the seed for the next episode without feeling forced.</p>
+          <textarea id="f6_connect" placeholder="e.g. 'This system is the foundation — in a future video I'll show you how to layer in time-blocking once this becomes automatic.'"></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goTo(5)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(7)">Next: Draft Notes →</button>
+      </div>
+    </div>
+
+    <!-- STEP 7: Draft Notes -->
+    <div class="step-panel" id="panel-7">
+      <div class="step-header">
+        <span class="step-tag">Step 08 — Draft Notes</span>
+        <h2 class="step-heading">Before you<br><em>write a word.</em></h2>
+        <p class="step-explainer">Use AI to roast your outline (not write your script). Then write fast and messy. Notes on rhythm, show-don't-tell moments, and pacing go here — the stuff to keep in mind during drafting.</p>
+      </div>
+      <div class="field-group">
+        <div class="field">
+          <label class="field-label">AI roast prompt <span class="field-tag">optional</span></label>
+          <p class="field-hint">Write the prompt you'll use to have Claude critique your outline before you draft. What should it look for?</p>
+          <textarea id="f7_roast" placeholder="e.g. 'Roast this outline. Tell me where the promise isn't being kept, where I'm telling instead of showing, and where a viewer would lose interest.'"></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Key "show don't tell" moments to build in</label>
+          <p class="field-hint">List 2–4 moments where instead of stating something, you'll let the viewer feel/discover it.</p>
+          <textarea id="f7_show" class="tall" placeholder="e.g. — Instead of 'this system is simple', walk through setup in real-time, no cuts&#10;— Instead of 'you've felt this frustration', open with a specific scenario they'll recognize&#10;— Let the viewer notice the pattern before I name it"></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Rhythm notes</label>
+          <p class="field-hint">Where do you want to speed up? Slow down? Use very short sentences? Vary the pace intentionally.</p>
+          <textarea id="f7_rhythm" placeholder="e.g. Open with 3 rapid-fire short sentences to create urgency. Slow down during the tutorial steps — give them time to follow. End with a single punchy line."></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Anything else to keep in mind while drafting</label>
+          <textarea id="f7_notes" placeholder="e.g. Don't start with 'Hey guys.' Avoid saying 'So basically...' Cut every sentence that doesn't serve the viewer. Keep intro under 60 seconds."></textarea>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="goTo(6)">← Back</button>
+        <button class="btn btn-primary" onclick="generateAndGoTo8()">Generate Outline →</button>
+      </div>
+    </div>
+
+    <!-- STEP 8: Export -->
+    <div class="step-panel" id="panel-8">
+      <div class="step-header">
+        <span class="step-tag">Step ✦ — Export</span>
+        <h2 class="step-heading">Your <em>complete</em><br>outline is ready.</h2>
+        <p class="step-explainer">This is your foundation. Don't start scripting without it. Copy it into your notes app, paste it into Claude for a roast, or download it as a text file.</p>
+      </div>
+
+      <div id="outline-panel"></div>
+
+      <div class="export-row">
+        <button class="btn-export primary-export" onclick="downloadOutline()">⬇ Download .txt</button>
+        <button class="btn-export" onclick="copyOutline()">⎘ Copy to Clipboard</button>
+        <button class="btn-export" onclick="goTo(0)">↺ Start Over</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  let currentStep = 0;
+  const totalSteps = 9;
+
+  function goTo(step) {
+    document.querySelectorAll('.step-panel').forEach((p, i) => {
+      p.classList.toggle('active', i === step);
+    });
+    document.querySelectorAll('.step-item').forEach((item, i) => {
+      item.classList.toggle('active', i === step);
+      if (i < step) item.classList.add('completed');
+    });
+    currentStep = step;
+    updateProgress(step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function updateProgress(step) {
+    const pct = Math.round((step / (totalSteps - 1)) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = pct + '%';
+  }
+
+  document.querySelectorAll('.step-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const step = parseInt(item.dataset.step);
+      if (step === 8) {
+        generateAndGoTo8();
+      } else {
+        goTo(step);
+      }
+    });
+  });
+
+  function g(id) {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function line(label, val, indent = '') {
+    if (!val) return '';
+    return `${indent}${label}\n${indent}  ${val.replace(/\n/g, '\n' + indent + '  ')}\n\n`;
+  }
+
+  function generateOutline() {
+    const title = g('f0_title') || g('f2_title') || 'Untitled Video';
+    const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    let out = '';
+    out += `╔══════════════════════════════════════════════════════════╗\n`;
+    out += `║           YOUTUBE SCRIPT OUTLINE                        ║\n`;
+    out += `╚══════════════════════════════════════════════════════════╝\n\n`;
+    out += `  Title: ${title}\n`;
+    out += `  Generated: ${now}\n`;
+    out += `  Framework: Isaac's Viral Script Method\n\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  1. FOUNDATION\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f0_viewer_goal')) out += `  Viewer's Goal:\n  ${g('f0_viewer_goal').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f0_creator_goal')) out += `  Creator's Goal:\n  ${g('f0_creator_goal').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f0_common_goal')) out += `  ★ Common Goal (the foundation):\n  ${g('f0_common_goal').replace(/\n/g,'  \n')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  2. THE PROBLEM\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f1_surface')) out += `  Surface Problem (technical):\n  ${g('f1_surface').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f1_deeper')) out += `  Deeper Problem (emotional):\n  ${g('f1_deeper').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f1_hint')) out += `  How to hint at it (show don't tell):\n  ${g('f1_hint').replace(/\n/g,'  \n')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  3. PACKAGING & PROMISE\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f2_title')) out += `  Final Title:\n  ${g('f2_title')}\n\n`;
+    if (g('f2_thumbnail')) out += `  Thumbnail Concept:\n  ${g('f2_thumbnail').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f2_promise')) out += `  The Promise (must fulfill):\n  ${g('f2_promise').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f2_breach')) out += `  What would breach the promise:\n  ${g('f2_breach').replace(/\n/g,'  \n')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  4. AUDIENCE AVATARS\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    const avatars = [
+      { name: 'av1_name', bg: 'av1_bg', knows: 'av1_knows', frust: 'av1_frustration', label: 'Primary' },
+      { name: 'av2_name', bg: 'av2_bg', knows: 'av2_knows', frust: 'av2_frustration', label: 'Secondary' },
+    ];
+    avatars.forEach(av => {
+      const name = g(av.name);
+      if (name) {
+        out += `  [${av.label}] ${name}\n`;
+        if (g(av.bg)) out += `    Background: ${g(av.bg)}\n`;
+        if (g(av.knows)) out += `    Knows: ${g(av.knows)}\n`;
+        if (g(av.frust)) out += `    Frustration: "${g(av.frust)}"\n`;
+        out += '\n';
+      }
+    });
+    if (g('f3_complexity')) out += `  Complexity Decision:\n  ${g('f3_complexity').replace(/\n/g,'  \n')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  5. RESEARCH & GAPS\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f4_competitors')) out += `  Competing Videos:\n  ${g('f4_competitors').replace(/\n/g,'\n  ')}\n\n`;
+    if (g('f4_gaps')) out += `  Unanswered Questions / Gaps:\n  ${g('f4_gaps').replace(/\n/g,'\n  ')}\n\n`;
+    if (g('f4_angle')) out += `  My Unique Angle:\n  ${g('f4_angle').replace(/\n/g,'  \n')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  6. STRUCTURE & HERO'S JOURNEY\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f5_start')) out += `  Viewer START State:\n  ${g('f5_start').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f5_end')) out += `  Viewer END State:\n  ${g('f5_end').replace(/\n/g,'  \n')}\n\n`;
+    out += `  Arc:\n`;
+    if (g('f5_hook')) out += `    ⚡ HOOK / Ordinary World:\n    ${g('f5_hook').replace(/\n/g,'\n    ')}\n\n`;
+    if (g('f5_call')) out += `    🔥 CALL / Stakes:\n    ${g('f5_call').replace(/\n/g,'\n    ')}\n\n`;
+    if (g('f5_trials')) out += `    🗺️  TRIALS / Main Content:\n    ${g('f5_trials').replace(/\n/g,'\n    ')}\n\n`;
+    if (g('f5_transform')) out += `    ✨ TRANSFORMATION / Payoff:\n    ${g('f5_transform').replace(/\n/g,'\n    ')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  7. UNIVERSE BUILDING\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f6_mission')) out += `  Channel Mission:\n  ${g('f6_mission').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f6_past')) out += `  Builds On: ${g('f6_past')}\n\n`;
+    if (g('f6_future')) out += `  Sets Up: ${g('f6_future')}\n\n`;
+    if (g('f6_connect')) out += `  Connection Line:\n  "${g('f6_connect')}"\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  8. DRAFTING NOTES\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (g('f7_roast')) out += `  AI Roast Prompt:\n  ${g('f7_roast').replace(/\n/g,'  \n')}\n\n`;
+    if (g('f7_show')) out += `  Show Don't Tell Moments:\n  ${g('f7_show').replace(/\n/g,'\n  ')}\n\n`;
+    if (g('f7_rhythm')) out += `  Rhythm Notes:\n  ${g('f7_rhythm').replace(/\n/g,'\n  ')}\n\n`;
+    if (g('f7_notes')) out += `  Other Drafting Reminders:\n  ${g('f7_notes').replace(/\n/g,'\n  ')}\n\n`;
+
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    out += `  NOW WRITE. FAST. MESSY. DON'T STOP.\n`;
+    out += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    return out;
+  }
+
+  function generateAndGoTo8() {
+    const outline = generateOutline();
+    document.getElementById('outline-panel').textContent = outline;
+    goTo(8);
+  }
+
+  function copyOutline() {
+    const text = document.getElementById('outline-panel').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => btn.textContent = orig, 2000);
+    });
+  }
+
+  function downloadOutline() {
+    const text = document.getElementById('outline-panel').textContent;
+    const titleField = document.getElementById('f0_title').value || document.getElementById('f2_title').value || 'outline';
+    const slug = titleField.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scriptforge-${slug}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>
