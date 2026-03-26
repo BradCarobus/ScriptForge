@@ -480,6 +480,100 @@
     .step-nav { flex-direction: row; flex-wrap: wrap; gap: 0.5rem; }
     .step-desc { display: none; }
   }
+
+  /* Header save/load actions */
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .autosave-status {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    min-width: 3rem;
+    text-align: right;
+  }
+
+  .btn-header {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 5px;
+    padding: 0.45rem 1rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-header:hover { background: #f0e060; transform: translateY(-1px); }
+
+  .btn-header-ghost {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-header-ghost:hover { border-color: var(--muted); transform: none; }
+
+  .btn-save-load {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    padding: 0.38rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+    transition: background 0.2s;
+  }
+  .btn-save-load:hover { background: #f0e060; }
+
+  .btn-save-delete {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.38rem 0.6rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+    transition: all 0.2s;
+    line-height: 1;
+  }
+  .btn-save-delete:hover { color: var(--accent2); border-color: var(--accent2); }
+
+  /* Restore banner */
+  .restore-banner {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 150;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  .restore-banner.hidden { display: none; }
+  .restore-banner span { color: var(--text); }
+  .restore-banner strong { color: var(--accent); }
+
+  @media (max-width: 600px) {
+    .header-actions .autosave-status { display: none; }
+    .btn-header { padding: 0.4rem 0.7rem; font-size: 0.78rem; }
+  }
 </style>
 </head>
 <body>
@@ -487,6 +581,14 @@
 <header>
   <span class="logo">ScriptForge</span>
   <span class="logo-sub">YouTube Outline Builder · by Isaac's Framework</span>
+  <div class="header-actions">
+    <span class="autosave-status" id="autosaveStatus"></span>
+    <label class="btn-header btn-header-ghost" title="Load a .json save file from your computer">
+      Load Save
+      <input type="file" id="loadFileInput" accept=".json" style="display:none" onchange="loadFromFile(event)">
+    </label>
+    <button class="btn-header" id="saveBtn" onclick="saveToFile()">Save Progress</button>
+  </div>
 </header>
 
 <div class="app-layout">
@@ -930,6 +1032,13 @@
   </main>
 </div>
 
+<!-- Autosave restore banner -->
+<div class="restore-banner hidden" id="restoreBanner">
+  <span><strong>Unsaved session found.</strong> Restore your last progress?</span>
+  <button class="btn-save-load" onclick="restoreAutosave()">Restore</button>
+  <button class="btn-save-delete" onclick="dismissRestoreBanner()">✕</button>
+</div>
+
 <script>
   let currentStep = 0;
   const totalSteps = 9;
@@ -1096,6 +1205,129 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  // ─── Save / Load State ───────────────────────────────────────────────────────
+
+  const FIELD_IDS = [
+    'f0_title','f0_viewer_goal','f0_creator_goal','f0_common_goal',
+    'f1_surface','f1_deeper','f1_hint',
+    'f2_title','f2_thumbnail','f2_promise','f2_breach',
+    'av1_name','av1_bg','av1_knows','av1_frustration',
+    'av2_name','av2_bg','av2_knows','av2_frustration','f3_complexity',
+    'f4_competitors','f4_gaps','f4_angle',
+    'f5_start','f5_end','f5_hook','f5_call','f5_trials','f5_transform',
+    'f6_mission','f6_past','f6_future','f6_connect',
+    'f7_roast','f7_show','f7_rhythm','f7_notes'
+  ];
+
+  function collectFormData() {
+    const fields = {};
+    FIELD_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) fields[id] = el.value;
+    });
+    return { version: 1, step: currentStep, savedAt: new Date().toISOString(), fields };
+  }
+
+  function restoreFormData(data) {
+    if (!data || !data.fields) return false;
+    FIELD_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && data.fields[id] !== undefined) el.value = data.fields[id];
+    });
+    if (typeof data.step === 'number') goTo(data.step);
+    return true;
+  }
+
+  // ── File-based Save (portable across devices) ────────────────────────────────
+
+  function saveToFile() {
+    const data = collectFormData();
+    const title = (data.fields.f0_title || data.fields.f2_title || 'scriptforge').trim();
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scriptforge-save-${slug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    const btn = document.getElementById('saveBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Saved!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  }
+
+  function loadFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data || !data.fields) { alert('This file doesn\'t look like a ScriptForge save.'); return; }
+        restoreFormData(data);
+      } catch (err) {
+        alert('Could not read the save file. Make sure it\'s a valid ScriptForge .json file.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input so the same file can be loaded again if needed
+    event.target.value = '';
+  }
+
+  // ── Auto-save to localStorage (same-device session recovery only) ────────────
+
+  let autoSaveTimer = null;
+
+  function scheduleAutoSave() {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem('scriptforge_autosave', JSON.stringify(collectFormData()));
+        const el = document.getElementById('autosaveStatus');
+        el.textContent = 'Auto-saved';
+        setTimeout(() => el.textContent = '', 2000);
+      } catch(e) {}
+    }, 1000);
+  }
+
+  FIELD_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', scheduleAutoSave);
+  });
+
+  // ── Restore banner (same device, accidental close recovery) ──────────────────
+
+  function restoreAutosave() {
+    try {
+      const raw = localStorage.getItem('scriptforge_autosave');
+      if (!raw) return;
+      restoreFormData(JSON.parse(raw));
+    } catch(e) {}
+    dismissRestoreBanner();
+  }
+
+  function dismissRestoreBanner() {
+    document.getElementById('restoreBanner').classList.add('hidden');
+  }
+
+  // On load: if autosave has content, show restore banner
+  (function() {
+    try {
+      const raw = localStorage.getItem('scriptforge_autosave');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!data || !data.fields) return;
+      const hasContent = Object.values(data.fields).some(v => v && v.trim().length > 0);
+      if (!hasContent) return;
+      const banner = document.getElementById('restoreBanner');
+      banner.classList.remove('hidden');
+      banner.style.display = 'flex';
+    } catch(e) {}
+  })();
 </script>
 </body>
 </html>
