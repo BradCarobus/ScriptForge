@@ -7,10 +7,11 @@ window.SF_PASSWORD = 'brad';
 // settings → Your apps → SDK setup and configuration → Config).
 // While apiKey is empty, everything is saved in this browser only.
 window.SF_FIREBASE_CONFIG = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: "AIzaSyCr0YYazRYgReRxNfWPhr8HZkpl0EImbYc",
+  authDomain: "scriptforge-ff54b.firebaseapp.com",
+  projectId: "scriptforge-ff54b",
+  storageBucket: "scriptforge-ff54b.firebasestorage.app",
+  messagingSenderId: "313589891016",
+  appId: "1:313589891016:web:e27f54098aca5d288ccafd",
+  measurementId: "G-8GK8W5X3HF"
 };
